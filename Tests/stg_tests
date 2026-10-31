@@ -1,0 +1,321 @@
+-- quality checks
+
+USE Bookstore_DWH
+
+--======== stg.Categories ========
+
+-- checking if nulls exist
+
+SELECT *
+FROM stg.Categories
+WHERE CategoryName IS NULL
+    OR Description IS NULL; -- no nulls found
+
+-- checking for duplicates in bussiness keys
+
+SELECT CategoryID, COUNT(*) AS DuplicateCount
+FROM stg.Categories
+GROUP BY CategoryID
+HAVING COUNT(*) > 1; --no duplicates found
+
+-- no data types converted. no need for data type conversion fails
+
+
+--======== stg.Promotions =========
+
+-- checking if nulls exist
+
+SELECT *
+FROM stg.Promotions
+WHERE PromotionCode IS NULL
+   OR PromotionName IS NULL
+   OR DiscountPercent IS NULL; -- no nulls found
+
+-- checking for bussiness keys duplicates
+
+SELECT PromotionID, COUNT(*) AS DuplicateCount
+FROM stg.Promotions
+GROUP BY PromotionID
+HAVING COUNT(*) > 1; -- no duplicates found
+
+-- checking for failed data type conversion
+
+SELECT *
+FROM ods.Promotions
+WHERE DiscountPercent IS NOT NULL
+    AND TRIM(DiscountPercent) <> ''
+    AND TRY_CONVERT(DECIMAL(5,2),DiscountPercent) IS NULL; -- no failed conversions found
+
+-- looking for incosistent strings
+SELECT DISTINCT PromotionCode, PromotionName
+FROM stg.Promotions -- none found
+
+-- checking for inconsistent cpitalization which could mean duplicates
+
+SELECT *
+FROM stg.Promotions
+WHERE PromotionCode <> UPPER(PromotionCode)
+   OR PromotionName <> UPPER(PromotionName); --- none found
+
+
+-- domain validation: checking whether values fall within acceptable business ranges 
+-- discount cant be over 100
+
+   SELECT *
+FROM stg.Promotions
+WHERE DiscountPercent < 0
+   OR DiscountPercent > 100; -- no issues found
+
+
+
+--======== stg.Books =========
+
+-- checking if any nulls exist
+
+SELECT *
+FROM stg.Books
+WHERE BookID IS NULL
+      OR ISBN IS NULL
+      OR BookTitle IS NULL
+      OR CategoryID IS NULL
+      OR Price IS NULL; -- no nulls found
+
+-- checking for bussiness keys duplicates
+
+SELECT BookID, COUNT(*) AS DuplicateCount
+FROM stg.Books
+GROUP BY BookID
+HAVING COUNT(*) > 1; -- no duplicates found
+
+-- checking for failed data type conversion
+SELECT *
+FROM ods.Books
+WHERE Price IS NOT NULL
+    AND TRIM(Price) <> ''
+    AND TRY_CONVERT(DECIMAL(10,2),TRIM(Price)) IS NULL;
+
+-- checking for inconsistent cpitalization which could mean duplicates
+
+SELECT *
+FROM stg.Books
+WHERE BookTitle <> UPPER(BookTitle); -- none found
+
+-- domain validation: checking whether values fall within acceptable business ranges 
+-- price cant be < 0
+
+SELECT *
+FROM stg.Books
+WHERE Price < 0; -- no issues found
+
+
+
+--======== stg.Sales =========
+
+-- checking for null values
+
+SELECT *
+FROM stg.Sales
+WHERE ReceiptNumber IS NULL
+   OR BookID IS NULL
+   OR SaleDate IS NULL
+   OR Quantity IS NULL
+   OR UnitPrice IS NULL
+   OR PaymentMethod IS NULL
+   OR DiscountAmount IS NULL; -- 12 rows  found with null values
+
+
+-- checking for bussiness keys duplicates
+
+SELECT ReceiptNumber, LineNumber, COUNT(*) AS DuplicateCount
+FROM stg.Sales
+GROUP BY ReceiptNumber, LineNumber
+HAVING COUNT(*) > 1; -- 4 duplicated values found
+
+SELECT *
+FROM ods.Sales
+WHERE
+    (SaleDate IS NOT NULL
+    AND TRIM(SaleDate) <> ''
+    AND TRY_CONVERT(DATE,TRIM(SaleDate)) IS NULL)
+OR (Quantity IS NOT NULL
+    AND TRIM(Quantity) <> ''
+    AND TRY_CONVERT(INT,TRIM(Quantity)) IS NULL)
+OR (UnitPrice IS NOT NULL
+    AND TRIM(UnitPrice) <> ''
+    AND TRY_CONVERT(DECIMAL(10,2),UnitPrice) IS NULL)
+OR (DiscountAmount IS NOT NULL
+    AND TRIM(DiscountAmount) <> ''
+    AND TRY_CONVERT(DECIMAL(10,5), DiscountAmount) IS NULL); -- no failed conversions found
+
+
+-- checking if every PromotionIDs in promotions table
+SELECT
+    s.SalesLineID,
+    TRIM(value) AS PromotionID
+FROM stg.Sales s
+CROSS APPLY STRING_SPLIT(s.PromotionIDs, ','); -- splitting by , total SalesLineID 172 **********
+
+-- domain validation: checking whether values fall within acceptable business ranges 
+SELECT *
+FROM stg.Sales
+WHERE Quantity <= 0; -- no issues found
+
+-- unit price and Discount cant be negative
+SELECT *
+FROM stg.Sales
+WHERE UnitPrice < 0
+   OR DiscountAmount < 0; -- no issues found
+
+-- discoumt amount cant be be more thsn quantity * unitprice
+SELECT * 
+FROM stg.Sales
+WHERE DiscountAmount > (Quantity * UnitPrice); -- no issues found
+
+-- does any payment method not belong to the set 4 options
+
+SELECT *
+FROM stg.Sales
+WHERE PaymentMethod NOT IN ('Cash', 'Card', 'Bank Transfer', 'Unknown')
+  AND PaymentMethod IS NOT NULL; -- no issues found
+
+
+  --=========  validating tables relationships ==========
+
+-- categoryID in stg.Categories >> stg.Books
+
+SELECT *
+FROM  stg.Books
+LEFT JOIN stg.Categories ON stg.Books.CategoryID = stg.Categories.CategoryID
+WHERE stg.Categories.CategoryID IS NULL; -- no issue found
+
+
+-- BookID in stg.Sales.BookID >> stg.Books.BookID
+SELECT * 
+FROM stg.Sales
+LEFT JOIN stg.Books ON stg.Sales.BookID = stg.Books.BookID
+WHERE stg.Books.BookID IS NULL; --no issues found
+
+-- PromotionIDs in stg.Sales >> stg.Promotions
+SELECT DISTINCT TRIM(SplitPromotions.value) AS PromotionID
+FROM stg.Sales
+CROSS APPLY STRING_SPLIT(stg.Sales.PromotionIDs, ',') AS SplitPromotions
+LEFT JOIN stg.Promotions
+    ON TRY_CONVERT(INT, TRIM(SplitPromotions.value)) = stg.Promotions.PromotionID
+WHERE stg.Promotions.PromotionID IS NULL; -- ' 99' does no exist im promotion tables ***********
+
+-- multi-value PromotiosID column (checking for empty commas at right, left, middle)
+SELECT *
+FROM stg.Sales
+WHERE PromotionIDs LIKE '%,,%' -- empty comma pair
+OR PromotionIDs LIKE '%,' -- comma with no value after
+OR PromotionIDs LIKE ',%' ;  --comma with no value before
+-- no issues found
+
+-- checking if any PromotionID value is non numeric value
+SELECT *
+FROM stg.Sales
+CROSS APPLY STRING_SPLIT(stg.Sales.PromotionIDs, ',') AS SplitPromotions
+WHERE TRY_CONVERT(INT, TRIM(SplitPromotions.value)) IS NULL
+AND TRIM(SplitPromotions.value) <> ''; -- no issues found all promotion ids are numeric values
+
+
+
+-- checking if SalesLineID is unique
+SELECT SalesLineID,
+    COUNT(*) AS Repetitions
+FROM stg.Sales
+GROUP BY SalesLineID
+HAVING COUNT(*) > 1; -- no repeated SalesLineID
+
+-- RecieptNumber and LineNumber each has reps, but toghether they are bussinees identifier
+WITH RN_LN_CTE AS (SELECT ReceiptNumber,
+    LineNumber,
+    Count(*) AS Repetitions
+FROM stg.Sales
+GROUP BY ReceiptNumber, LineNumber
+HAVING COUNT(*) > 1 ) -- 4 duplicated values found *****
+
+
+SELECT stg.Sales.*,
+        RN_LN_CTE.Repetitions
+FROM stg.Sales INNER JOIN RN_LN_CTE
+ON stg.Sales.ReceiptNumber = RN_LN_CTE.ReceiptNumber
+AND stg.Sales.LineNumber = RN_LN_CTE.LineNumber; -- using CTE to find all duplicated values 
+-- 4 values each duplicated twice
+
+-- verifying that the duplicates are identical (redundant inputs)
+-- concatinating all columns values to verify the input is redundant
+/*
+SELECT ReceiptNumber, LineNumber,
+COUNT(*) AS Repetitions,
+COUNT(DISTINCT CONCAT(
+SaleID, '-' ,
+ReceiptNumber, '-',
+LineNumber, '-',
+BookID, '-',
+SaleDate, '-',
+PaymentMethod, '-',
+Quantity, '-',
+UnitPrice, '-',
+DiscountAmount, '-',
+PromotionIDs
+)) AS DistinctRecords
+FROM stg.Sales
+GROUP BY ReceiptNumber, LineNumber
+HAVING COUNT(*) > 1; -- 1 distinct record for each row means its full true duplicate
+*/
+
+SELECT
+    ReceiptNumber,
+    LineNumber,
+    SaleID,
+    BookID,
+    SaleDate,
+    PaymentMethod,
+    Quantity,
+    UnitPrice,
+    DiscountAmount,
+    PromotionIDs,
+    COUNT(*) AS Repetitions
+FROM stg.Sales
+GROUP BY
+    ReceiptNumber,
+    LineNumber,
+    SaleID,
+    BookID,
+    SaleDate,
+    PaymentMethod,
+    Quantity,
+    UnitPrice,
+    DiscountAmount,
+    PromotionIDs
+HAVING COUNT(*) > 1; -- group by all columns, except for SalesLineID to confirm full row is duplicate 
+
+
+ -- choosing the lowest SalesLineID to keep
+SELECT
+    ReceiptNumber,
+    LineNumber,
+    MIN(SalesLineID) AS SalesLineID_To_Keep,
+    COUNT(*) AS Repetitions
+FROM stg.Sales
+GROUP BY ReceiptNumber, LineNumber
+HAVING COUNT(*) > 1;
+-- 
+
+-- checking bussines rule validation
+SELECT *
+FROM stg.Sales
+WHERE Quantity <= 0 -- sale with negative or zer quantity 
+    OR UnitPrice < 0 -- negative price values
+    OR DiscountAmount > (Quantity * UnitPrice) -- discount is higher than original price
+-- no iisues found
+
+
+-- validating null date inputs or dates in the future
+SELECT *
+FROM stg.Sales
+WHERE SaleDate IS NULL
+    OR SaleDate > GETDATE(); -- no issues found
+
+
