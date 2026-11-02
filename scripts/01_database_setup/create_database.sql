@@ -1,32 +1,28 @@
 
-/*---------------------------------------------------
+/*==============================================================
+  Script: create_database.sql
 
-### Purpose
+  Purpose:
+      Creates the local SQL Server database used as the target
+      environment for the Online Bookstore Data Warehouse project.
 
-Creates the local SQL Server database that serves as the target environment for the Online Bookstore Data Warehouse project.
+  Operations:
+      1. Displays the SQL Server instance and current database.
+      2. Checks whether Bookstore_DWH already exists.
+      3. Creates the database if it does not exist.
 
-### Operations
+  Target Database: Bookstore_DWH
+  Platform: Microsoft SQL Server
 
-1. Retrieves the SQL Server instance name and current database context for environment verification.
-2. Checks whether the `Bookstore_DWH` database already exists.
-3. Creates the database only if it does not exist, preventing unnecessary errors when the script is executed multiple times.
+  Note:
+      Schema and table creation are handled separately within
+      their respective ODS, STG, and DWH setup scripts.
 
-### Target Database
+  Execution Order:
+      Run this script before executing the pipeline setup scripts.
 
-* **Database Name:** `Bookstore_DWH`
-* **Platform:** Microsoft SQL Server
+==============================================================*/
 
-### Execution
-
-Run this script before executing the ODS, STG and DWH setup scripts.
-
-### Notes
-
-* The script does not create schemas or tables; these are handled separately within their respective pipeline layers.
-* The database is created locally and acts as the destination for the warehouse pipeline.
-* The existence check makes the script safe to execute repeatedly.
-
- ----------------------------------------------------*/
 
 
 -- Verify SQL Server and current database
