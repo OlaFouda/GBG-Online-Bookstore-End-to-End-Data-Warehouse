@@ -212,7 +212,7 @@ EXEC ods.LoadODS;
 
 EXEC stg.LoadSTG;
 
-EXEC stg.LoadDWH;
+EXEC dwh.LoadDWH;
 
 EXEC dwh.DataQualityDWH;
 ```
