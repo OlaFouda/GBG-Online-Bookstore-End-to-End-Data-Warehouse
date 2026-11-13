@@ -1,24 +1,22 @@
 
 /*
 ===============================================================================
-    Phase B: Staging Layer (STG)
+    Phase B: Staging Layer (STG) - Table Creation
 ===============================================================================
 
     Purpose:
-        Create the staging schema and tables used to store cleaned,
-        standardized, and analysis-ready data.
+        Create the staging schema and tables used to store cleaned and
+        standardized data before loading it into the Data Warehouse.
 
-    Responsibilities:
-        - Define the staging table structures.
-        - Apply data cleaning and transformations during the loading process.
-
-    Steps:
-        1. Create the STG schema.
-        2. Create the STG tables.
+    Tables:
+        1. Categories
+        2. Promotions
+        3. Books
+        4. Sales
 
     Note:
-        Data loading and transformation logic is implemented separately
-        in the staging stored procedure.
+        Existing STG tables are dropped and recreated when this script runs.
+        This will remove any data currently stored in these tables.
 ===============================================================================
 */
 
@@ -69,16 +67,10 @@ GO
 
 CREATE TABLE stg.Promotions
 (
-    PromotionBenefitID INT            NOT NULL,
-    PromotionID        INT            NOT NULL,
-    PromotionCode      NVARCHAR(30)   NOT NULL,
-    PromotionName      NVARCHAR(120)  NOT NULL,
-    BenefitCode        NVARCHAR(30)   NOT NULL,
-    BenefitName        NVARCHAR(120)  NOT NULL,
-    DiscountPercent    DECIMAL(5,2)   NOT NULL,
-
-    CONSTRAINT PK_stg_Promotions
-        PRIMARY KEY (PromotionBenefitID)
+    PromotionID     INT            NOT NULL PRIMARY KEY,
+    PromotionCode   NVARCHAR(30)   NULL,
+    PromotionName   NVARCHAR(120)  NULL,
+    DiscountPercent DECIMAL(5,2)   NULL
 );
 GO
 
@@ -122,6 +114,7 @@ CREATE TABLE stg.Sales
     Quantity       INT            NULL,
     UnitPrice      DECIMAL(10,2)  NULL,
     DiscountAmount DECIMAL(10,2)  NULL,
-    PromotionID    INT            NULL
+    PromotionIDs   NVARCHAR(100)  NULL,
+    PromotionStatus NVARCHAR(30)  NULL
 );
 GO
